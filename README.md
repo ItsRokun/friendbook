@@ -14,7 +14,7 @@ Welcome to RGBlog, a social media prototype designed to showcase the features of
 ## RGBlog
 - A social media prototype that features real-time communication and user management.
 - Built with HTML, CSS, JavaScript, PHP, and MySQL.
-- **Project Link**: http://rgblog.kesug.com/
+- **Project Demo**: http://rgblog.kesug.com/
 - **GitHub Code**: https://github.com/itsrokun/rgblog-social-media-prototype
 
 ## Tech Stack
