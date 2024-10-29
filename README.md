@@ -19,7 +19,7 @@ Welcome to RGBlog, a social media prototype designed to showcase the features of
 
 ## Tech Stack
 
-- **Frontend**: HTML, CSS (Tailwind CSS), JavaScript
+- **Frontend**: HTML, CSS, JavaScript
 - **Backend**: PHP
 - **Database**: MySQL
 - **Server**: Apache
