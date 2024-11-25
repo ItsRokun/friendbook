@@ -59,7 +59,7 @@
     <!-- Main content can go here -->
 
     <footer>
-        <p class="end-message">Thank You for Visiting!</p>
+        <p class="end-message"></p>
     </footer>
 </body>
 </html>
