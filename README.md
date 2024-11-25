@@ -6,8 +6,8 @@ Welcome to Friendbook, a social media prototype designed to showcase the feature
 
 - **Frontend**: HTML, Tailwind CSS, JavaScript
 - **Backend**: PHP
-- **Database**: MySQL
 - **Server**: Apache
+- **Database**: MySQL
   
 ## Features
 
