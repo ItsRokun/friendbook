@@ -1,6 +1,6 @@
-# RGBlog - Social Media Prototype
+# Friendbook - Social Media Prototype
 
-Welcome to RGBlog, a social media prototype designed to showcase the features of a dynamic and interactive platform for users to connect, share, and communicate in real time.
+Welcome to Friendbook, a social media prototype designed to showcase the features of a dynamic and interactive platform for users to connect, share, and communicate in real time.
 
 ## Features
 
@@ -9,13 +9,12 @@ Welcome to RGBlog, a social media prototype designed to showcase the features of
 - **Posts**: Users can create, like, and comment on posts.
 - **Real-Time Communication**: Instant messaging between users.
 - **Responsive Design**: Optimized for both desktop and mobile devices.
-- **Admin Panel**: Manage users and content effectively.
 
-## RGBlog
+## Friendbook
 - A social media prototype that features real-time communication and user management.
 - Built with HTML, CSS, JavaScript, PHP, and MySQL.
-- **Project Demo**: http://rgblog.kesug.com/
-- **GitHub Code**: https://github.com/itsrokun/rgblog-social-media-prototype
+- **Project Demo**: http://friendbook.kesug.com/
+- **GitHub Code**: https://github.com/itsrokun/friendbook
 
 ## Tech Stack
 
@@ -30,4 +29,4 @@ To run this project locally, follow these steps:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/itsrokun/rgblog-social-media-prototype.git
+   git clone https://github.com/itsrokun/friendbook.git
