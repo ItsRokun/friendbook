@@ -1,74 +1,102 @@
 <?php
-// Start the session
 session_start();
-include('../config/db.php');
+include_once "../php/config.php";
 
-// Check if the user is logged in and email is stored in the session
-if (!isset($_SESSION['user'])) {
-    header("Location: login.php");
+// Set the timezone to Bangladesh
+date_default_timezone_set('Asia/Dhaka');
+
+// Check if the user is logged in by verifying the session variable 'unique_id'
+if (!isset($_SESSION['unique_id'])) {
+    header("location: ../login.php");
     exit();
 }
 
-// Get the logged-in user's email and ID
-$email = $_SESSION['user'];
-$user_stmt = $conn->prepare("SELECT id, username, profile_picture FROM users WHERE email = ?");
-$user_stmt->bind_param("s", $email);
+// Fetch the logged-in user's information using 'unique_id'
+$unique_id = $_SESSION['unique_id'];
+$user_stmt = $conn->prepare("SELECT user_id, fname, lname, email FROM users WHERE unique_id = ?");
+$user_stmt->bind_param("s", $unique_id);
 $user_stmt->execute();
 $user_result = $user_stmt->get_result();
 $user_data = $user_result->fetch_assoc();
-$user_id = $user_data['id'];
-$username = $user_data['username'];
+
+// Check if user data is found
+if ($user_data) {
+    $user_id = $user_data['user_id'];
+    $username = htmlspecialchars($user_data['fname'] . ' ' . $user_data['lname']);
+    $email = htmlspecialchars($user_data['email']);
+} else {
+    echo "<p>User ID not found.</p>";
+    exit();
+}
 $user_stmt->close();
 
-if (!$user_id) {
-    echo json_encode(['status' => 'error', 'message' => 'User ID not found.']);
-    exit();
+// Determine the current hour of the day
+$current_hour = date('H');
+
+// Set the greeting based on the time of day
+$greeting = ($current_hour >= 5 && $current_hour < 12) ? "Good Morning" :
+            (($current_hour >= 12 && $current_hour < 17) ? "Good Afternoon" : "Good Night");
+
+// Function to handle Likes
+function toggleLike($conn, $user_id, $post_id) {
+    // Check if the user has already liked the post
+    $stmt = $conn->prepare("SELECT * FROM likes WHERE user_id = ? AND post_id = ?");
+    $stmt->bind_param("ii", $user_id, $post_id);
+    $stmt->execute();
+    $liked = $stmt->get_result()->num_rows > 0;
+    $stmt->close();
+
+    if ($liked) {
+        // Unlike the post
+        $stmt = $conn->prepare("DELETE FROM likes WHERE user_id = ? AND post_id = ?");
+        $stmt->bind_param("ii", $user_id, $post_id);
+        $stmt->execute();
+        $stmt->close();
+        return ['status' => 'unliked'];
+    } else {
+        // Like the post
+        $stmt = $conn->prepare("INSERT INTO likes (user_id, post_id) VALUES (?, ?)");
+        $stmt->bind_param("ii", $user_id, $post_id);
+        $stmt->execute();
+        $stmt->close();
+        return ['status' => 'liked'];
+    }
 }
 
-// Handle like button submission
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['like_post_id'])) {
+// Handle Like/Unlike
+if (isset($_POST['like_post_id'])) {
     $post_id = $_POST['like_post_id'];
 
-    // Check if the user has already liked this post
-    $check_stmt = $conn->prepare("SELECT * FROM likes WHERE post_id = ? AND user_id = ?");
-    $check_stmt->bind_param("ii", $post_id, $user_id);
-    $check_stmt->execute();
-    $check_result = $check_stmt->get_result();
-
-    if ($check_result->num_rows > 0) {
-        echo json_encode(['status' => 'error', 'message' => 'You have already liked this post.']);
-    } else {
-        $stmt = $conn->prepare("INSERT INTO likes (post_id, user_id) VALUES (?, ?)");
-        $stmt->bind_param("ii", $post_id, $user_id);
-
-        if ($stmt->execute()) {
-            echo json_encode(['status' => 'success', 'message' => 'Post liked!']);
-        } else {
-            echo json_encode(['status' => 'error', 'message' => 'Error: ' . $stmt->error]);
-        }
-
-        $stmt->close();
-    }
-    exit();
-}
-
-// Handle comment submission
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['comment_post_id'])) {
-    $post_id = $_POST['comment_post_id'];
-    $comment = $_POST['comment'];
-
-    $stmt = $conn->prepare("INSERT INTO comments (post_id, user_id, comment) VALUES (?, ?, ?)");
-    $stmt->bind_param("iis", $post_id, $user_id, $comment);
-
-    if ($stmt->execute()) {
-        echo json_encode(['status' => 'success', 'message' => 'Comment added!']);
-    } else {
-        echo json_encode(['status' => 'error', 'message' => 'Error: ' . $stmt->error]);
+    if (!$user_id || !$post_id) {
+        echo json_encode(['status' => 'error', 'message' => 'Invalid parameters']);
+        exit();
     }
 
+    $like_status = toggleLike($conn, $user_id, $post_id);
+
+    // Get updated like count
+    $stmt = $conn->prepare("SELECT COUNT(*) AS like_count FROM likes WHERE post_id = ?");
+    $stmt->bind_param("i", $post_id);
+    $stmt->execute();
+    $like_count = $stmt->get_result()->fetch_assoc()['like_count'];
     $stmt->close();
+
+    echo json_encode([
+        'status' => 'success',
+        'new_status' => $like_status['status'],
+        'new_like_count' => $like_count
+    ]);
     exit();
 }
+
+// Fetch all posts with associated user information
+$sql = "
+    SELECT posts.*, CONCAT(users.fname, ' ', users.lname) AS username, users.img AS profile_picture
+    FROM posts
+    JOIN users ON posts.user_id = users.user_id
+    ORDER BY posts.created_at DESC
+";
+$result = $conn->query($sql);
 ?>
 
 <!DOCTYPE html>
@@ -78,230 +106,105 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['comment_post_id'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Home</title>
     <link rel="stylesheet" href="../css/home.css">
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
-        }
-
-        /* Back to Top Button */
-        #backToTop {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            display: none;
-            background: linear-gradient(45deg, #ff416c, #ff4b2b);
-            color: white;
-            padding: 15px;
-            font-size: 20px;
-            border: none;
-            border-radius: 50px;
-            cursor: pointer;
-            z-index: 1000;
-            transition: opacity 0.3s ease, transform 0.3s ease;
-        }
-
-        #backToTop:hover {
-            background: linear-gradient(45deg, #ff4b2b, #ff416c);
-            transform: scale(1.15);
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        .feedback-message {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: #4CAF50;
-            color: white;
-            padding: 15px;
-            border-radius: 5px;
-            z-index: 1000;
-        }
-
-        .create-post-button {
-            display: inline-block;
-            background-color: #ff4b2b;
-            color: white;
-            padding: 10px 15px;
-            border-radius: 5px;
-            text-decoration: none;
-        }
-
-        /* Modal Styles */
-        #notificationModal {
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: white;
-            border: 1px solid #ccc;
-            padding: 20px;
-            z-index: 1001;
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
-        }
-
-        #notificationModal button {
-            margin-top: 10px;
-        }
-    </style>
 </head>
-<body>
+<body class="bg-gray-50 text-gray-800">
 
 <?php include('../header.php'); ?>
 
-<div class="welcome-message">
-    <h2>Welcome, <?php echo htmlspecialchars($username); ?>!</h2>
-</div>
+<div class="container mx-auto p-4">
 
-<div class="create-post-container">
-    <a href="create_post.php" class="create-post-button">Create Post</a>
-</div>
+    <!-- Dynamic Greeting Message -->
+    <div class="text-center mb-8">
+        <h2 class="text-3xl font-semibold text-pink-500"><?php echo $greeting . ", " . $username; ?>!</h2>
+    </div>
 
-<div class="post-list">
-    <?php
-    // Display all posts with username and profile picture
-    $result = $conn->query("
-        SELECT posts.*, users.username, users.profile_picture 
-        FROM posts 
-        JOIN users ON posts.user_id = users.id 
-        ORDER BY posts.created_at DESC
-    ");
+    <!-- Create Post Button -->
+    <div class="text-center mb-8">
+        <a href="create_post.php" class="inline-block bg-yellow-400 text-gray-800 font-bold py-3 px-6 rounded-lg text-lg shadow-md transition-transform transform hover:bg-yellow-500 hover:translate-y-1 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-pink-400 focus:ring-opacity-50"><i class="fas fa-pencil-alt"></i>Create Post
+        </a>
+    </div>
 
-    while ($row = $result->fetch_assoc()) {
-        $post_id = $row['id'];
+    <!-- Post List -->
+    <div class="space-y-8">
+        <?php
+        if ($result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $post_id = $row['post_id'];
+                $username = htmlspecialchars($row['username']);
+                $profile_picture = htmlspecialchars($row['profile_picture']);
+                $post_content = htmlspecialchars($row['content']);
+                $profile_picture_path = '../php/images/' . $profile_picture;
 
-        // Count likes
-        $like_count_stmt = $conn->prepare("SELECT COUNT(*) AS like_count FROM likes WHERE post_id = ?");
-        $like_count_stmt->bind_param("i", $post_id);
-        $like_count_stmt->execute();
-        $like_count_result = $like_count_stmt->get_result();
-        $like_count = $like_count_result->fetch_assoc()['like_count'];
-        $like_count_stmt->close();
+                // Count likes and comments
+                $like_count_stmt = $conn->prepare("SELECT COUNT(*) AS like_count FROM likes WHERE post_id = ?");
+                $like_count_stmt->bind_param("i", $post_id);
+                $like_count_stmt->execute();
+                $like_count = $like_count_stmt->get_result()->fetch_assoc()['like_count'];
+                $like_count_stmt->close();
 
-        // Count comments
-        $comment_count_stmt = $conn->prepare("SELECT COUNT(*) AS comment_count FROM comments WHERE post_id = ?");
-        $comment_count_stmt->bind_param("i", $post_id);
-        $comment_count_stmt->execute();
-        $comment_count_result = $comment_count_stmt->get_result();
-        $comment_count = $comment_count_result->fetch_assoc()['comment_count'];
-        $comment_count_stmt->close();
+                $comment_count_stmt = $conn->prepare("SELECT COUNT(*) AS comment_count FROM comments WHERE post_id = ?");
+                $comment_count_stmt->bind_param("i", $post_id);
+                $comment_count_stmt->execute();
+                $comment_count = $comment_count_stmt->get_result()->fetch_assoc()['comment_count'];
+                $comment_count_stmt->close();
 
-        echo "<div class='post'>";
+                // Check if the current user has liked the post
+                $like_status_stmt = $conn->prepare("SELECT * FROM likes WHERE user_id = ? AND post_id = ?");
+                $like_status_stmt->bind_param("ii", $user_id, $post_id);
+                $like_status_stmt->execute();
+                $liked = $like_status_stmt->get_result()->num_rows > 0;
+                $like_status_stmt->close();
 
-        // Display user profile picture
-        $profile_picture = htmlspecialchars($row['profile_picture']);
-        echo "<img src='../images/" . $profile_picture . "' alt='Profile Picture' class='user-logo'>";
+                // Determine the like button text
+                $like_button_text = $liked ? "Unlike" : "Like";
 
-        // Display username and post content
-        echo "<h3>" . htmlspecialchars($row['username']) . "</h3>";
-        echo "<p>" . htmlspecialchars($row['content']) . "</p>";
+                echo "<div class='bg-white p-6 rounded-lg shadow-md space-y-4' data-post-id='$post_id'>";
 
-        // Display post image if any
-        if (!empty($row['image'])) {
-            echo "<img src='../images/" . htmlspecialchars($row['image']) . "' class='post-image'>";
-        }
+                // Display user profile picture
+                echo "<div class='flex items-center space-x-4'>";
+                echo "<img src='" . (file_exists($profile_picture_path) ? $profile_picture_path : '../php/images/default-logo.png') . "' class='w-12 h-12 rounded-full' alt='Profile Picture'>";
+                echo "<h3 class='text-xl font-semibold'>" . $username . "</h3>";
+                echo "</div>";
 
-        // Display like and comment count
-        echo "<p>Likes: " . htmlspecialchars($like_count) . "</p>";
-        echo "<p>Comments: " . htmlspecialchars($comment_count) . "</p>";
+                // Display post content
+                echo "<p class='text-lg text-gray-700'>" . $post_content . "</p>";
 
-        // Like and comment forms
-        echo "<form method='POST' class='like-form'>";
-        echo "<input type='hidden' name='like_post_id' value='" . htmlspecialchars($post_id) . "'>";
-        echo "<button type='submit' class='like-button'>Like</button>";
-        echo "</form>";
+                // Display post image if it exists
+                if (!empty($row['image'])) {
+                    echo "<img src='../php/images/" . htmlspecialchars($row['image']) . "' class='w-full rounded-lg mt-4' alt='Post Image'>";
+                }
 
-        echo "<form method='POST' class='comment-form'>";
-        echo "<input type='hidden' name='comment_post_id' value='" . htmlspecialchars($post_id) . "'>";
-        echo "<textarea name='comment' required></textarea>";
-        echo "<button type='submit' class='comment-button'>Comment</button>";
-        echo "</form>";
+                // Display like and comment count
+                echo "<p class='mt-2'>Likes: <span class='font-semibold'>" . $like_count . "</span> | Comments: <span class='font-semibold'>" . $comment_count . "</span></p>";
 
-        echo "<a href='view.php?post_id=" . htmlspecialchars($post_id) . "' class='view-button'>View</a>";
-        echo "</div>";
-    }
-    ?>
-</div>
+                // Like/Unlike form
+                echo "<form method='POST' class='like-form mt-4' data-post-id='" . $post_id . "'>";
+                echo "<input type='hidden' name='like_post_id' value='" . $post_id . "'>";
+                echo "<button type='submit' class='bg-pink-500 text-white py-2 px-4 rounded-lg hover:bg-pink-600 transition-colors'>$like_button_text</button>";
+                echo "</form>";
 
-<!-- Modal for notifications -->
-<div id="notificationModal">
-    <span id="modalMessage"></span>
-    <button onclick="document.getElementById('notificationModal').style.display='none';">Close</button>
-</div>
+                // Comment form
+                echo "<form method='POST' class='comment-form mt-4' data-post-id='" . $post_id . "'>";
+                echo "<input type='hidden' name='comment_post_id' value='" . $post_id . "'>";
+                echo "<textarea name='comment' class='w-full p-2 border rounded-lg' placeholder='Add a comment...'></textarea>";
+                echo "<button type='submit' class='bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors mt-2'>Comment</button>";
+                echo "</form>";
 
-<?php include('../footer.php'); ?>
+                // View button
+                echo "<div class='flex justify-end mt-4'>";
+                echo "<a href='view.php?post_id=" . $post_id . "' class='bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors'>View</a>";
+                echo "</div>";
+                echo "</div>"; // End of post div
 
-<button id="backToTop">↑</button>
-
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    function handleFormSubmission(form, action) {
-        const formData = new FormData(form);
-
-        fetch('home.php', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            handleSuccessResponse(action, form, data);
-        })
-        .catch(error => {
-            console.error('Error:', error);
-        });
-    }
-
-    document.querySelectorAll('.like-form').forEach(form => {
-        form.addEventListener('submit', function(event) {
-            event.preventDefault();
-            handleFormSubmission(form, 'like');
-        });
-    });
-
-    document.querySelectorAll('.comment-form').forEach(form => {
-        form.addEventListener('submit', function(event) {
-            event.preventDefault();
-            handleFormSubmission(form, 'comment');
-        });
-    });
-
-    // Back to top functionality
-    const backToTopButton = document.getElementById('backToTop');
-    window.onscroll = function() {
-        if (document.body.scrollTop > 20 || document.documentElement.scrollTop > 20) {
-            backToTopButton.style.display = 'block';
+            }
         } else {
-            backToTopButton.style.display = 'none';
+            echo "<p>No posts available.</p>";
         }
-    };
+        ?>
+    </div>
 
-    backToTopButton.onclick = function() {
-        document.body.scrollTop = 0;
-        document.documentElement.scrollTop = 0;
-    };
-});
+</div>
 
-function handleSuccessResponse(action, form, data) {
-    if (data.status === 'success') {
-        document.getElementById('modalMessage').innerText = data.message;
-        document.getElementById('notificationModal').style.display = 'block';
-        // Reload the page after a successful like or comment
-        setTimeout(() => {
-            location.reload();
-        }, 2000); // Reload after 2 seconds
-    } else {
-        document.getElementById('modalMessage').innerText = data.message;
-        document.getElementById('notificationModal').style.display = 'block';
-    }
-}
-</script>
+<script src="../js/home.js"></script>
 </body>
 </html>
