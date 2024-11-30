@@ -1,6 +1,6 @@
 ## Friendbook - Simple Social Media
 
-Welcome to Friendbook, a social media prototype designed to showcase the features of a dynamic and interactive platform for users to connect, share, and communicate in real time.
+Welcome to Friendbook, a social media prototype designed to showcase the features of a dynamic and interactive platform for users to connect, share and communicate in real time.
 
 ## Tech Stack
 
