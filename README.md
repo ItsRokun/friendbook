@@ -13,7 +13,7 @@ Welcome to Friendbook, a social media prototype designed to showcase the feature
 
 - **User Authentication**: Registration and login functionality for users.
 
-- **Posts**: Users can create, like, and comment on posts.
+- **Posts**: Users can create post, like, and comment on posts.
 - **Real-Time Communication**: Instant messaging between users.
 - **Responsive Design**: Optimized for both desktop and mobile devices.
 
